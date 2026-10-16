@@ -1,0 +1,70 @@
+/* 预览、测量和 PDF 共用同一组字体与尺寸，避免导出时重新排出不同版式。 */
+.resume-document { color: #252d36; font-size: var(--resume-size); line-height: var(--resume-line); font-weight: 400; letter-spacing: 0; text-align: left; -webkit-print-color-adjust: exact; print-color-adjust: exact; overflow-wrap: anywhere; }
+.resume-document.font-sans { font-family: 'Noto Sans SC Variable', 'PingFang SC', 'Microsoft YaHei', Arial, sans-serif; }
+.resume-document.font-serif { font-family: 'Songti SC', 'SimSun', 'Times New Roman', serif; }
+.resume-document.font-mono { font-family: 'SFMono-Regular', Consolas, 'Noto Sans SC Variable', 'PingFang SC', monospace; }
+.resume-sheet { width: 210mm; height: 297mm; padding: var(--resume-margin); background: #fff; box-shadow: 0 3px 22px #253b3210, 0 0 1px #35483a12; position: relative; transform-origin: top left; }
+.sheet-content { width: 100%; }
+.measurement { position: fixed; left: -20000px; top: 0; visibility: hidden; pointer-events: none; z-index: -1; }
+.resume-block { padding: 0; margin: 0; }
+.resume-header { padding-bottom: 5px; }
+.resume-topline { display: flex; align-items: center; gap: 20px; color: var(--resume-accent); font-size: 12px; letter-spacing: 2px; font-weight: 600; padding-bottom: 15px; }
+.resume-topline > span { flex: 1; height: 2px; background: var(--resume-accent); }
+.resume-topline > b { font-size: 12px; font-weight: 600; white-space: nowrap; }
+.resume-header-main { display: flex; justify-content: space-between; gap: 20px; align-items: center; }
+.resume-identity { flex: 1; min-width: 0; }
+.resume-header h1 { font-size: 40px; color: #17222d; font-weight: 700; line-height: 1.3; letter-spacing: .5px; margin: 0 0 3px; }
+.resume-headline { font-size: 20px; font-weight: 600; line-height: 1.5; color: var(--resume-accent); margin-bottom: 8px; }
+.resume-contact { display: flex; align-items: center; flex-wrap: wrap; gap: 5px 17px; font-size: 12px; color: #515b65; line-height: 1.7; }
+.resume-contact > span { display: inline-flex; gap: 6px; align-items: center; max-width: 100%; min-width: 0; }
+.resume-contact svg { width: 12px; height: 12px; }
+.resume-photo { width: var(--resume-photo-size); height: calc(var(--resume-photo-size) * 1.25); object-fit: cover; flex-shrink: 0; display: block; }
+.resume-photo.shape-circle { height: var(--resume-photo-size); }
+.align-center .resume-header-main { justify-content: center; position: relative; }
+.align-center .resume-identity { text-align: center; }
+.align-center .resume-contact { justify-content: center; }
+.align-center .resume-photo { position: static; }
+.block-section { padding-top: var(--resume-gap); padding-bottom: 7px; }
+.block-section h2 { font-size: calc(var(--resume-size) + 3px); color: var(--resume-accent); font-weight: 650; line-height: 1.55; border-bottom: 1px solid var(--resume-accent); padding-bottom: 3px; margin: 0; }
+.block-item { padding: 5px 0 3px; }
+.resume-item-row { display: flex; gap: 20px; justify-content: space-between; align-items: baseline; }
+.resume-item-row h3 { font-size: calc(var(--resume-size) + 1px); font-weight: 650; line-height: 1.65; margin: 0; min-width: 0; }
+.resume-item-row > span { font-size: calc(var(--resume-size) - 1.5px); color: #5f6b78; flex-shrink: 0; max-width: 43%; text-align: right; }
+.resume-item-row p { font-size: var(--resume-size); margin: 0; }
+.block-bullet, .block-skill { display: flex; align-items: flex-start; gap: 8px; padding-bottom: 1px; }
+.bullet-dot { flex: 0 0 5px; width: 5px; padding-left: 1px; }
+.block-text { flex: 1; white-space: pre-wrap; min-width: 0; }
+.block-text b { font-weight: 500; }
+.block-paragraph { padding-bottom: 2px; }
+.block-bullet.continuation .bullet-dot, .block-skill.continuation .bullet-dot { visibility: hidden; }
+.resume-footer { position: absolute; bottom: 9mm; left: var(--resume-margin); right: var(--resume-margin); font-size: 10px; color: #89938d; display: flex; justify-content: space-between; border-top: 1px solid #e6ebe7; padding-top: 6px; }
+.template-minimal .resume-topline { display: none; }
+.template-minimal .resume-header { padding-top: 2px; padding-bottom: 10px; }
+.template-minimal .resume-headline { color: #59646a; font-weight: 400; font-size: 17px; }
+.template-minimal .block-section h2 { border-color: #dce2df; color: #252f34; font-weight: 600; }
+.template-minimal .resume-contact svg { display: none; }
+.template-minimal .resume-contact { gap: 5px 20px; }
+.template-editorial .resume-header h1 { font-weight: 600; letter-spacing: 3px; }
+.template-editorial .resume-topline { padding-bottom: 20px; }
+.template-editorial .block-section h2 { border-bottom: 0; border-left: 3px solid var(--resume-accent); padding: 0 0 0 9px; }
+.template-editorial .block-section { padding-bottom: 9px; }
+.template-editorial .resume-headline { letter-spacing: 2px; font-weight: 400; }
+.template-technical .resume-topline { padding-bottom: 12px; }
+.template-technical .resume-header h1 { font-size: 31px; }
+.template-technical .block-section h2 { background: color-mix(in srgb, var(--resume-accent) 7%, white); border: 0; padding: 4px 8px; font-size: calc(var(--resume-size) + 1px); letter-spacing: 1px; }
+.template-technical .resume-item-row h3 { font-weight: 600; }
+.print-view { background: white; }
+.print-view .resume-pages { display: block; min-width: 0; width: 210mm; padding: 0; }
+.print-view .sheet-frame { width: 210mm; height: 297mm; }
+.print-view .resume-sheet { box-shadow: none; }
+@page { size: A4; margin: 0; }
+@media print {
+  html, body, #root { margin: 0 !important; padding: 0 !important; width: 210mm !important; background: white !important; }
+  .app-header, .mode-nav, .editor-panel, .preview-toolbar, .local-status, .preview-hint, .toast, .mobile-view-switch, .dialog { display: none !important; }
+  .app-shell, .app-body, .preview-workspace, .preview-stage { display: block !important; position: static !important; height: auto !important; overflow: visible !important; padding: 0 !important; width: auto !important; min-width: 0 !important; background: white !important; }
+  .measurement { display: none !important; }
+  .resume-pages { display: block !important; gap: 0 !important; width: 210mm !important; min-width: 0 !important; padding: 0 !important; }
+  .sheet-frame { width: 210mm !important; height: 297mm !important; margin: 0 !important; break-after: page; }
+  .sheet-frame:last-child { break-after: auto; }
+  .resume-sheet { transform: none !important; box-shadow: none !important; break-inside: avoid; }
+}
