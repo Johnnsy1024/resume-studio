@@ -117,7 +117,7 @@ function parseEntries(section: Section, lines: string[]) {
   }
 }
 
-const profileLabels: [keyof Resume['profile'], string][] = [
+const profileLabels: [Exclude<keyof Resume['profile'], 'summaryFormat'>, string][] = [
   ['name', '姓名|Name'], ['headline', '求职意向|目标岗位|应聘职位|意向岗位|意向职位|Desired Role|Target Role'],
   ['email', '邮箱|电子邮箱|电子邮件|E-?mail'], ['phone', '手机号码|联系电话|联系方式|手机|电话|Phone|Mobile|Tel'],
   ['city', '现居城市|所在城市|现居地|现居|城市|地址|Location|Based in'], ['years', '工作年限|工作经验|从业年限'],

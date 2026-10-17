@@ -1,22 +1,30 @@
-import type { Resume } from '../schema.ts';
+import type { Resume, TextFormat } from '../schema.ts';
+import { dateRange } from './dates.ts';
 import { recognizeResume } from './importResume.ts';
+import { descriptionSegments, sliceFormats, cleanDescription, formattedMarkdown, editFormats } from './format.ts';
 
 export function descriptionLines(text: string) {
-  return text.split(/\r?\n/).map(line => line.replace(/^\s*(?:[-*]\s+|[•·]\s*|\d+[.)]\s+|\d+、\s*)/, '').trim()).filter(Boolean);
+  return descriptionSegments(text).map(line => line.text);
 }
 
 export function toMarkdown(resume: Resume) {
   const { profile } = resume;
   const lines = [`# ${profile.name}`, profile.headline,
     [profile.city, profile.phone, profile.email, profile.website, profile.years].filter(Boolean).join(' | '), ''];
-  if (profile.summary.trim()) lines.push(`## ${resume.language === 'en' ? 'Profile' : '个人简介'}`, profile.summary, '');
+  if (profile.summary.trim()) lines.push(`## ${resume.language === 'en' ? 'Profile' : '个人简介'}`, formattedMarkdown(profile.summary, profile.summaryFormat), '');
   for (const section of resume.sections.filter(section => section.visible)) {
     lines.push(`## ${section.title}`);
     for (const item of section.items) {
       if (item.title || item.subtitle) lines.push(`### ${[item.title, item.subtitle].filter(Boolean).join(' · ')}`);
-      const meta = [[item.start, item.end].filter(Boolean).join(' – '), item.location].filter(Boolean).join(' | ');
+      const meta = [section.kind === 'skills' ? '' : dateRange(item.start, item.end, resume.language), item.location].filter(Boolean).join(' | ');
       if (meta) lines.push(meta);
-      lines.push(...descriptionLines(item.description).map(line => `- ${line}`), '');
+      if (section.kind === 'experience' && item.responsibilities?.trim()) lines.push(formattedMarkdown(item.responsibilities, item.responsibilitiesFormat), '');
+      const bullets = item.descriptionBullets ?? section.kind !== 'custom';
+      lines.push(...descriptionSegments(item.description, bullets, item.descriptionLineBullets).map(line => `${line.bullet ? '- ' : ''}${formattedMarkdown(line.text, sliceFormats(item.descriptionFormat, line.start, line.end))}${line.bullet ? '' : '\n'}`), '');
+      if (section.kind === 'experience') for (const project of item.projects || []) {
+        if (project.name.trim()) lines.push(formattedMarkdown(project.name, [{ start: 0, end: project.name.length, bold: true, black: true, underline: false }]), '');
+        lines.push(...descriptionSegments(project.description, project.descriptionBullets ?? true, project.descriptionLineBullets).map(line => `${line.bullet ? '- ' : ''}${formattedMarkdown(line.text, sliceFormats(project.descriptionFormat, line.start, line.end))}${line.bullet ? '' : '\n'}`), '');
+      }
     }
   }
   return lines.join('\n');
@@ -43,8 +51,9 @@ export function checkResume(resume: Resume, pageCount: number): ResumeCheck[] {
   checks.push(experience.length
     ? { level: 'pass', title: '已填写经历', detail: `包含 ${experience.length} 条工作或项目经历。` }
     : { level: 'tip', title: '添加工作、实习或项目经历', detail: '可以从一个具体问题、你的行动和结果开始写。' });
-  const described = experience.filter(item => item.description.trim());
-  if (experience.some(item => !item.description.trim())) checks.push({ level: 'tip', title: '有经历缺少具体说明', detail: '补充你负责的事情、采取的行动和实际结果。' });
+  const contentOf = (item: typeof experience[number]) => [item.responsibilities || '', item.description, ...(item.projects || []).map(project => project.description)].filter(Boolean).join('\n');
+  const described = experience.map(item => ({ ...item, description: contentOf(item) })).filter(item => item.description.trim());
+  if (experience.some(item => !contentOf(item).trim())) checks.push({ level: 'tip', title: '有经历缺少具体说明', detail: '补充你负责的事情、采取的行动和实际结果。' });
   if (described.length && !described.some(item => /\d/.test(item.description))) checks.push({ level: 'tip', title: '可以补充结果数据', detail: '在有真实依据时，写出规模、效率、完成数量或变化幅度。' });
   const longLines = described.flatMap(item => descriptionLines(item.description)).filter(line => line.length > 150);
   if (longLines.length) checks.push({ level: 'tip', title: `${longLines.length} 条描述比较长`, detail: '尝试一行写一个要点，把任务、行动和结果讲清楚。' });
@@ -64,11 +73,28 @@ export function checkResume(resume: Resume, pageCount: number): ResumeCheck[] {
 
 export function cleanResume(resume: Resume): Resume {
   const clean = (text: string) => text.split('\n').map(line => line.trim().replace(/[ \t]+/g, ' ')).join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  let summary = resume.profile.summary;
+  let summaryFormat: TextFormat[] = resume.profile.summaryFormat || [];
+  // 从后往前清理空白，逐次移动选区，避免中间的格式被整段替换吞掉。
+  for (const [pattern, replacement] of [[/^[^\S\n]+|[^\S\n]+$/gm, ''], [/[ \t]+/g, ' '], [/\n{3,}/g, '\n\n'], [/^\s+|\s+$/g, '']] as const) {
+    for (const match of [...summary.matchAll(pattern)].reverse()) {
+      const start = match.index, end = start + match[0].length;
+      const next = summary.slice(0, start) + replacement + summary.slice(end);
+      summaryFormat = editFormats(summary, next, summaryFormat, { start, end, inputType: 'insertText' });
+      summary = next;
+    }
+  }
+  const { summary: originalSummary, summaryFormat: originalFormat, ...profile } = resume.profile;
   return { ...resume,
-    profile: Object.fromEntries(Object.entries(resume.profile).map(([key, value]) => [key, clean(value)])) as Resume['profile'],
+    profile: { ...Object.fromEntries(Object.entries(profile).map(([key, value]) => [key, clean(value)])), summary, summaryFormat } as Resume['profile'],
     sections: resume.sections.map(section => ({ ...section, title: clean(section.title), items: section.items.map(item => ({ ...item,
       title: clean(item.title), subtitle: clean(item.subtitle), location: clean(item.location), start: clean(item.start), end: clean(item.end),
-      description: descriptionLines(item.description).join('\n'),
+      ...(item.responsibilities !== undefined ? (() => {
+        const cleaned = cleanDescription(item.responsibilities, item.responsibilitiesFormat, false);
+        return { responsibilities: cleaned.description, responsibilitiesFormat: cleaned.descriptionFormat };
+      })() : {}),
+      ...cleanDescription(item.description, item.descriptionFormat, item.descriptionBullets ?? section.kind !== 'custom', item.descriptionLineBullets),
+      ...(item.projects ? { projects: item.projects.map(project => ({ ...project, name: clean(project.name), ...cleanDescription(project.description, project.descriptionFormat, project.descriptionBullets ?? true, project.descriptionLineBullets) })) } : {}),
     })) })),
   };
 }

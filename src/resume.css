@@ -68,3 +68,17 @@
   .sheet-frame:last-child { break-after: auto; }
   .resume-sheet { transform: none !important; box-shadow: none !important; break-inside: avoid; }
 }
+
+/* 局部格式同时用于编辑效果、分页测量和 PDF。 */
+.text-bold { font-weight: 700; }
+.text-black { color: #000; }
+.text-underline { text-decoration: underline; text-underline-offset: 0.14em; text-decoration-thickness: 1px; }
+
+.block-project { color: #000; font-weight: 700; padding: 5px 0 2px; }
+
+.resume-work-identity { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 12px; min-width: 0; flex: 1; }
+.resume-work-role { font-size: var(--resume-size); overflow-wrap: anywhere; }
+.resume-work-location { display: block; font-size: inherit; }
+
+/* 公司名比正文大 3px，随整体字号同步缩放。 */
+.resume-item-row h3.resume-company-name { font-size: calc(var(--resume-size) + 3px); }

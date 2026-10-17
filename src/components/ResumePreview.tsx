@@ -1,17 +1,19 @@
 import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { MapPin, Mail, Phone, Globe2 } from 'lucide-react';
-import type { Resume, ResumeStyle } from '../schema';
-import { descriptionLines } from '../lib/content';
+import type { Resume, ResumeStyle, TextFormat } from '../schema';
+import { descriptionSegments, sliceFormats, formattedRuns, formatClass } from '../lib/format';
+import { FormattedText } from './FormattedText';
+import { dateRange } from '../lib/dates';
 import { paginate } from '../lib/paginate';
 
 const MM = 96 / 25.4;
 const PAGE_WIDTH = 210 * MM;
 const PAGE_HEIGHT = 297 * MM;
 type Block = {
-  key: string; type: 'header' | 'section' | 'item' | 'paragraph' | 'bullet' | 'skill';
+  key: string; type: 'header' | 'section' | 'item' | 'paragraph' | 'bullet' | 'skill' | 'project';
   text?: string; title?: string; subtitle?: string; meta?: string; location?: string;
-  keepNext?: boolean; continuation?: boolean;
+  keepNext?: boolean; continuation?: boolean; inlineTitle?: boolean; company?: boolean; formats?: TextFormat[];
 };
 type SizedBlock = Block & { height: number };
 
@@ -27,23 +29,39 @@ function blocksFor(resume: Resume): Block[] {
   const blocks: Block[] = [{ key: 'header', type: 'header' }];
   if (resume.profile.summary.trim()) {
     blocks.push({ key: 'summary-title', type: 'section', title: resume.language === 'en' ? 'Profile' : '个人简介', keepNext: true });
-    resume.profile.summary.split('\n').filter(line => line.trim()).forEach((text, index) => blocks.push({ key: `summary-${index}`, type: 'paragraph', text }));
+    // 按原文累计位置，保留空行之后的选区偏移。
+    let offset = 0;
+    resume.profile.summary.split('\n').forEach((text, index) => {
+      if (text.trim()) blocks.push({ key: `summary-${index}`, type: 'paragraph', text, formats: sliceFormats(resume.profile.summaryFormat, offset, offset + text.length) });
+      offset += text.length + 1;
+    });
   }
   for (const section of resume.sections.filter(section => section.visible)) {
-    const items = section.items.filter(item => [item.title, item.subtitle, item.description, item.start, item.end].some(value => value.trim()));
+    const items = section.items.filter(item => [item.title, item.subtitle, item.description, item.start, item.end].some(value => value.trim()) || (section.kind === 'experience' && item.responsibilities?.trim()) || (section.kind === 'experience' && item.projects?.some(project => project.name.trim() || project.description.trim())));
     if (!items.length) continue;
     blocks.push({ key: section.id, type: 'section', title: section.title, keepNext: true });
     for (const item of items) {
       if (section.kind === 'skills') {
-        blocks.push({ key: item.id, type: 'skill', title: item.title, text: item.description });
+        blocks.push({ key: item.id, type: 'skill', title: item.title, text: item.description, formats: item.descriptionFormat });
         continue;
       }
-      const lines = descriptionLines(item.description);
+      const bullets = item.descriptionBullets ?? section.kind !== 'custom';
+      const lines = descriptionSegments(item.description, bullets, item.descriptionLineBullets);
       if (item.title || item.subtitle || item.start || item.end || item.location) blocks.push({
-        key: item.id, type: 'item', title: item.title, subtitle: item.subtitle,
-        meta: [item.start, item.end].filter(Boolean).join(' – '), location: item.location, keepNext: lines.length > 0,
+        key: item.id, type: 'item', company: section.kind === 'experience', inlineTitle: section.kind === 'experience' || section.kind === 'education', title: item.title, subtitle: item.subtitle,
+        meta: dateRange(item.start, item.end, resume.language), location: item.location, keepNext: (section.kind === 'experience' && !!item.responsibilities?.trim()) || lines.length > 0 || !!item.projects?.some(project => project.name.trim() || project.description.trim()),
       });
-      lines.forEach((text, index) => blocks.push({ key: `${item.id}-${index}`, type: section.kind === 'custom' ? 'paragraph' : 'bullet', text }));
+      // 职责作为普通段落独立参与分页，长内容仍能正常跨页。
+      if (section.kind === 'experience') descriptionSegments(item.responsibilities || '', false).forEach((line, index) => blocks.push({
+        key: `${item.id}-responsibilities-${index}`, type: 'paragraph', text: line.text, formats: sliceFormats(item.responsibilitiesFormat, line.start, line.end),
+      }));
+      lines.forEach((line, index) => blocks.push({ key: `${item.id}-${index}`, type: line.bullet ? 'bullet' : 'paragraph', text: line.text, formats: sliceFormats(item.descriptionFormat, line.start, line.end) }));
+      if (section.kind === 'experience') for (const project of item.projects || []) {
+        const details = descriptionSegments(project.description, project.descriptionBullets ?? true, project.descriptionLineBullets);
+        // 项目名独立成行，并尽量与后面的首条描述排在同一页。
+        if (project.name.trim()) blocks.push({ key: `${item.id}-${project.id}-title`, type: 'project', text: project.name, keepNext: details.length > 0 });
+        details.forEach((line, index) => blocks.push({ key: `${item.id}-${project.id}-${index}`, type: line.bullet ? 'bullet' : 'paragraph', text: line.text, formats: sliceFormats(project.descriptionFormat, line.start, line.end) }));
+      }
     }
   }
   return blocks;
@@ -74,14 +92,21 @@ function ResumeBlock({ block, resume }: { block: Block; resume: Resume }) {
   const className = `resume-block block-${block.type}${block.continuation ? ' continuation' : ''}`;
   if (block.type === 'header') return <div className={className}><ResumeHeader resume={resume} /></div>;
   if (block.type === 'section') return <div className={className}><h2>{block.title}</h2></div>;
+  if (block.type === 'item' && block.inlineTitle) return <div className={className}>
+    <div className="resume-item-row resume-work-heading">
+      <div className="resume-work-identity"><h3 className={block.company ? 'resume-company-name' : undefined}>{block.title}</h3>{block.subtitle && <span className="resume-work-role">{block.subtitle}</span>}</div>
+      <span>{block.meta}{block.location && <small className="resume-work-location">{block.location}</small>}</span>
+    </div>
+  </div>;
   if (block.type === 'item') return <div className={className}>
     <div className="resume-item-row"><h3>{block.title}</h3><span>{block.meta}</span></div>
     {(block.subtitle || block.location) && <div className="resume-item-row"><p>{block.subtitle}</p><span>{block.location}</span></div>}
   </div>;
+  const text = <FormattedText text={block.text || ''} formats={block.formats} />;
   if (block.type === 'skill') return <div className={className}>
-    <span className="bullet-dot">•</span><span className="block-text">{block.title ? <><b>{block.title}：</b>{block.text}</> : block.text}</span>
+    <span className="bullet-dot">•</span><span className="block-text">{block.title ? <><b>{block.title}：</b>{text}</> : text}</span>
   </div>;
-  return <div className={className}>{block.type === 'bullet' && <span className="bullet-dot">•</span>}<span className="block-text">{block.text}</span></div>;
+  return <div className={className}>{block.type === 'bullet' && <span className="bullet-dot">•</span>}<span className="block-text">{text}</span></div>;
 }
 
 function capacityFor(style: ResumeStyle) {
@@ -108,12 +133,18 @@ export const ResumePreview = forwardRef<PreviewHandle, Props>(function ResumePre
       const nodes = Array.from(root.children) as HTMLElement[];
       const sized = blocks.map((block, index) => ({ ...block, height: nodes[index].getBoundingClientRect().height }));
       const nodeByKey = new Map(nodes.map((node, index) => [blocks[index].key, node]));
-      const measure = (block: SizedBlock, text: string) => {
+      const measure = (block: SizedBlock, text: string, formats = block.formats) => {
         const original = nodeByKey.get(block.key.split(':part')[0]);
         if (!original) return Number.POSITIVE_INFINITY;
         const clone = original.cloneNode(true) as HTMLElement;
         const content = clone.querySelector('.block-text')!;
-        content.textContent = text;
+        // 测量时保留局部字重，避免加粗后分页宽度与实际渲染不一致。
+        content.replaceChildren(...formattedRuns(text, formats).map(run => {
+          const span = document.createElement('span');
+          span.className = formatClass(run);
+          span.textContent = run.text;
+          return span;
+        }));
         if (block.type === 'skill' && block.title && !block.continuation) {
           const title = document.createElement('b');
           title.textContent = `${block.title}：`;
@@ -131,7 +162,8 @@ export const ResumePreview = forwardRef<PreviewHandle, Props>(function ResumePre
         let low = 1, high = characters.length - 1, count = 0;
         while (low <= high) {
           const middle = Math.floor((low + high) / 2);
-          if (measure(block, characters.slice(0, middle).join('')) <= space - 0.5) { count = middle; low = middle + 1; }
+          const part = characters.slice(0, middle).join('');
+          if (measure(block, part, sliceFormats(block.formats, 0, part.length)) <= space - 0.5) { count = middle; low = middle + 1; }
           else high = middle - 1;
         }
         if (!count) return null;
@@ -140,9 +172,11 @@ export const ResumePreview = forwardRef<PreviewHandle, Props>(function ResumePre
         if (whitespace > candidate.length * 0.7) count = Array.from(candidate.slice(0, whitespace + 1)).length;
         const firstText = characters.slice(0, count).join('');
         const restText = characters.slice(count).join('');
+        const first = { ...block, text: firstText, formats: sliceFormats(block.formats, 0, firstText.length), keepNext: false };
+        const rest = { ...block, key: `${block.key}:part`, title: undefined, continuation: true, text: restText, formats: sliceFormats(block.formats, firstText.length, block.text.length), keepNext: false };
         return [
-          { ...block, text: firstText, height: measure(block, firstText), keepNext: false },
-          { ...block, key: `${block.key}:part`, title: undefined, continuation: true, text: restText, height: measure(block, restText), keepNext: false },
+          { ...first, height: measure(first, firstText) },
+          { ...rest, height: measure(rest, restText) },
         ];
       });
       setPages(next);

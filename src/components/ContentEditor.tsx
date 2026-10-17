@@ -1,22 +1,54 @@
 import { useRef, useState } from 'react';
 import { Plus, ChevronDown, ChevronUp, ArrowUp, ArrowDown, Eye, EyeOff, Trash2, GripVertical, ShieldCheck } from 'lucide-react';
-import type { Resume, ResumeItem, Section, SectionKind } from '../schema';
+import type { Resume, ResumeItem, Section, SectionKind, WorkProject } from '../schema';
 import { newItem, newSection, sectionLabels } from '../schema';
-import { descriptionLines } from '../lib/content';
-import { Field, IconButton, TextArea } from './ui';
+import { descriptionSegments, sliceFormats } from '../lib/format';
+import { FormattedText } from './FormattedText';
+import { DescriptionEditor } from './DescriptionEditor';
+import { dateRange } from '../lib/dates';
+import { Field, IconButton } from './ui';
 
 type Update = (change: (resume: Resume) => Resume, group?: boolean) => void;
 
+function DescriptionSummary({ item, bullets }: { item: Pick<ResumeItem, 'description' | 'descriptionFormat' | 'descriptionLineBullets'>; bullets: boolean }) {
+  const lines = descriptionSegments(item.description, bullets, item.descriptionLineBullets);
+  const content = (line: typeof lines[number]) => <FormattedText text={line.text} formats={sliceFormats(item.descriptionFormat, line.start, line.end)} />;
+  return <div>{lines.map((line, index) => line.bullet ? <ul key={index}><li>{content(line)}</li></ul> : <p key={index}>{content(line)}</p>)}</div>;
+}
+
+function WorkProjects({ projects, onChange }: { projects: WorkProject[]; onChange: (projects: WorkProject[], group?: boolean) => void }) {
+  const update = (next: WorkProject, group: boolean) => onChange(projects.map(project => project.id === next.id ? next : project), group);
+  const move = (index: number, direction: number) => {
+    const next = [...projects];
+    [next[index], next[index + direction]] = [next[index + direction], next[index]];
+    onChange(next, false);
+  };
+  return <div className="work-projects field-wide">
+    <div className="section-heading"><strong>工作中的项目</strong><button type="button" className="button button-small" disabled={projects.length >= 50}
+      onClick={() => onChange([...projects, { id: crypto.randomUUID(), name: '', description: '' }], false)}><Plus size={15} />添加项目</button></div>
+    {projects.map((project, index) => <div className="work-project-editor" key={project.id}>
+      <Field label="项目名称" value={project.name} maxLength={240} wide placeholder="单独成行，自动加黑加粗，不带黑点" onChange={event => update({ ...project, name: event.target.value }, true)} />
+      <DescriptionEditor label="项目描述" value={project.description} formats={project.descriptionFormat} bullets={project.descriptionBullets ?? true} lineBullets={project.descriptionLineBullets} onLineBulletsChange={descriptionLineBullets => update({ ...project, descriptionLineBullets }, false)} rows={4} placeholder="介绍项目职责、行动和结果。"
+        onChange={(description, descriptionFormat, group, descriptionLineBullets) => update({ ...project, description, descriptionFormat, descriptionLineBullets }, group)} />
+      <div className="entry-actions">
+        <IconButton label="上移项目" disabled={index === 0} onClick={() => move(index, -1)}><ArrowUp size={15} /></IconButton>
+        <IconButton label="下移项目" disabled={index === projects.length - 1} onClick={() => move(index, 1)}><ArrowDown size={15} /></IconButton>
+        <button type="button" className="text-button danger" onClick={() => onChange(projects.filter(current => current.id !== project.id), false)}><Trash2 size={14} />删除项目</button>
+      </div>
+    </div>)}
+  </div>;
+}
+
 function EntryEditor({ item, kind, onChange, onRemove, onMove, first, last }: {
-  item: ResumeItem; kind: SectionKind; onChange: (item: ResumeItem) => void; onRemove: () => void;
+  item: ResumeItem; kind: SectionKind; onChange: (item: ResumeItem, group?: boolean) => void; onRemove: () => void;
   onMove: (direction: number) => void; first: boolean; last: boolean;
 }) {
   const [open, setOpen] = useState(!item.title && !item.description);
-  const change = (key: keyof ResumeItem, value: string) => onChange({ ...item, [key]: value });
+  const change = (key: keyof ResumeItem, value: string) => onChange({ ...item, [key]: value }, true);
   const labels = kind === 'education' ? ['学校名称', '专业与学历'] : kind === 'projects' ? ['项目名称', '担任角色'] : kind === 'skills' ? ['技能分类', '补充说明'] : kind === 'custom' ? ['标题', '副标题'] : ['公司名称', '职位名称'];
   return <div className={`entry-card${open ? ' is-editing' : ''}`}>
     <button className="entry-summary" type="button" onClick={() => setOpen(!open)} aria-expanded={open}>
-      <strong>{item.title || '未命名条目'}</strong><span>{[item.start, item.end].filter(Boolean).join(' – ')}</span>
+      <strong>{item.title || '未命名条目'}{kind === 'experience' && item.subtitle && <span className="entry-job-title"> · {item.subtitle}</span>}</strong><span>{dateRange(item.start, item.end)}</span>
       {open ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
     </button>
     {open ? <div className="entry-form">
@@ -25,12 +57,16 @@ function EntryEditor({ item, kind, onChange, onRemove, onMove, first, last }: {
         {kind !== 'skills' && <Field label={labels[1]} value={item.subtitle} maxLength={240} onChange={event => change('subtitle', event.target.value)} />}
         {kind !== 'skills' && <>
           <Field label="开始时间" placeholder="2021.03" value={item.start} maxLength={40} onChange={event => change('start', event.target.value)} />
-          <Field label="结束时间" placeholder="至今" value={item.end} maxLength={40} onChange={event => change('end', event.target.value)} />
+          <Field label="结束时间" placeholder="留空默认为至今" value={item.end} maxLength={40} onChange={event => change('end', event.target.value)} />
           <Field label="地点（选填）" value={item.location} maxLength={120} wide onChange={event => change('location', event.target.value)} />
         </>}
-        <TextArea label={kind === 'skills' ? '技能内容' : '经历描述'} value={item.description} rows={kind === 'skills' ? 3 : 6} maxLength={30000}
-          placeholder={kind === 'skills' ? '例如：SQL、Python、数据分析' : '每行一个要点，写清楚你做了什么、如何做、结果怎样。'}
-          hint={kind === 'skills' ? undefined : '每行会自动排为一个要点，无需手动输入圆点。'} onChange={event => change('description', event.target.value)} />
+        {kind === 'experience' && <DescriptionEditor label="主要工作职责" value={item.responsibilities || ''} formats={item.responsibilitiesFormat} paragraph maxLength={20000} rows={3}
+          placeholder="用一段话概述主要工作内容和职责，显示在公司名与职位名称下一行。"
+          onChange={(responsibilities, responsibilitiesFormat, group) => onChange({ ...item, responsibilities, responsibilitiesFormat }, group)} />}
+        <DescriptionEditor label={kind === 'skills' ? '技能内容' : '经历描述'} value={item.description} formats={item.descriptionFormat} paragraph={kind === 'skills'} bullets={item.descriptionBullets ?? kind !== 'custom'} lineBullets={item.descriptionLineBullets} onLineBulletsChange={kind === 'skills' ? undefined : descriptionLineBullets => onChange({ ...item, descriptionLineBullets }, false)} rows={kind === 'skills' ? 3 : 6}
+          placeholder={kind === 'skills' ? '例如：SQL、Python、数据分析' : '写清楚你做了什么、如何做、结果怎样。'}
+          onChange={(description, descriptionFormat, group, descriptionLineBullets) => onChange({ ...item, description, descriptionFormat, descriptionLineBullets }, group)} />
+        {kind === 'experience' && <WorkProjects projects={item.projects || []} onChange={(projects, group) => onChange({ ...item, projects }, group)} />}
       </div>
       <div className="entry-actions">
         <IconButton label="上移条目" disabled={first} onClick={() => onMove(-1)}><ArrowUp size={15} /></IconButton>
@@ -39,9 +75,14 @@ function EntryEditor({ item, kind, onChange, onRemove, onMove, first, last }: {
         <button className="text-button" onClick={() => setOpen(false)}>完成编辑</button>
       </div>
     </div> : <button type="button" className="entry-preview" onClick={() => setOpen(true)} aria-label={`编辑${item.title || '条目'}`}>
-      {item.subtitle && <p>{item.subtitle}</p>}
-      {kind === 'skills' ? <p className="muted">{item.description}</p> : <ul>{descriptionLines(item.description).map((line, index) => <li key={index}>{line}</li>)}</ul>}
-      {!item.description && !item.subtitle && <span className="muted">点击补充内容</span>}
+      {kind !== 'experience' && item.subtitle && <p>{item.subtitle}</p>}
+      {kind === 'experience' && item.responsibilities && <p className="entry-responsibilities"><FormattedText text={item.responsibilities} formats={item.responsibilitiesFormat} /></p>}
+      {kind === 'skills' ? <p className="muted"><FormattedText text={item.description} formats={item.descriptionFormat} /></p> : <DescriptionSummary item={item} bullets={item.descriptionBullets ?? kind !== 'custom'} />}
+      {kind === 'experience' && item.projects?.map(project => <div key={project.id}>
+        {project.name && <p className="work-project-name">{project.name}</p>}
+        <DescriptionSummary item={project} bullets={project.descriptionBullets ?? true} />
+      </div>)}
+      {!item.description && !item.responsibilities && !item.subtitle && !item.projects?.length && <span className="muted">点击补充内容</span>}
     </button>}
   </div>;
 }
@@ -70,7 +111,7 @@ function SectionEditor({ section, onChange, onRemove, onMove, first, last }: {
       </div>
     </div>
     {section.items.map((item, index) => <EntryEditor key={item.id} item={item} kind={section.kind} first={index === 0} last={index === section.items.length - 1}
-      onChange={next => onChange({ ...section, items: section.items.map(current => current.id === next.id ? next : current) }, true)}
+      onChange={(next, group = true) => onChange({ ...section, items: section.items.map(current => current.id === next.id ? next : current) }, group)}
       onRemove={() => onChange({ ...section, items: section.items.filter(current => current.id !== item.id) })}
       onMove={direction => moveItem(index, direction)} />)}
     {!section.items.length && <div className="empty-section">还没有内容，点击“添加”开始填写。</div>}
@@ -106,7 +147,7 @@ export function ContentEditor({ resume, update }: { resume: Resume; update: Upda
           <Field label="城市" value={resume.profile.city} maxLength={120} placeholder="所在城市" onChange={event => changeProfile('city', event.target.value)} />
           <Field label="工作年限" value={resume.profile.years} maxLength={80} placeholder="例如：5 年 / 应届生" onChange={event => changeProfile('years', event.target.value)} />
           <Field label="个人网站 / 作品集（选填）" value={resume.profile.website} maxLength={240} wide placeholder="例如：portfolio.example.com" onChange={event => changeProfile('website', event.target.value)} />
-          <TextArea label="个人简介" value={resume.profile.summary} maxLength={20000} rows={4} placeholder="用几句话介绍与你的目标岗位最相关的经验与能力。" onChange={event => changeProfile('summary', event.target.value)} />
+          <DescriptionEditor label="个人简介" value={resume.profile.summary} formats={resume.profile.summaryFormat} paragraph maxLength={20000} rows={4} placeholder="用几句话介绍与你的目标岗位最相关的经验与能力。" onChange={(summary, summaryFormat, group) => update(document => ({ ...document, profile: { ...document.profile, summary, summaryFormat } }), group)} />
         </div>
       </div>
       {resume.sections.map((section, index) => <SectionEditor key={section.id} section={section} first={index === 0} last={index === resume.sections.length - 1}

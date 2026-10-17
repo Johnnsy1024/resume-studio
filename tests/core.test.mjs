@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { createBlank, resumeSchema } from '../src/schema.ts';
 import { createSample } from '../src/lib/sample.ts';
 import { checkResume, cleanResume, descriptionLines, importText, toMarkdown } from '../src/lib/content.ts';
+import { dateRange } from '../src/lib/dates.ts';
 import { paginate } from '../src/lib/paginate.ts';
 import { ResumeStore } from '../server/store.mjs';
 
@@ -81,4 +82,17 @@ test('损坏文件不会被当成空白状态', async () => {
     await assert.rejects(new ResumeStore(directory).list());
     assert.equal(await readFile(join(directory, 'broken.json'), 'utf8'), '{broken');
   } finally { await rm(directory, { recursive: true }); }
+});
+
+
+test('结束时间留空默认为至今，明确结束时间和未填日期保持原意', () => {
+  assert.equal(dateRange('2022.03', ''), '2022.03 – 至今');
+  assert.equal(dateRange('2022.03', '  '), '2022.03 – 至今');
+  assert.equal(dateRange('2022.03', '', 'en'), '2022.03 – Present');
+  assert.equal(dateRange('2022.03', '2024.06'), '2022.03 – 2024.06');
+  assert.equal(dateRange('', ''), '');
+  const resume = createSample();
+  resume.sections[0].items[0].start = '2022.03';
+  resume.sections[0].items[0].end = '';
+  assert.ok(toMarkdown(resume).includes('2022.03 – 至今'));
 });

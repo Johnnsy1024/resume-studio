@@ -146,6 +146,7 @@ export default function App() {
     {modal === 'delete' && <Dialog title="删除这份简历？" onClose={() => setModal('')}><p>将删除“{resume.title}”。建议先导出 JSON 备份。删除的文件会保留在本机 data/trash 目录。</p><div className="dialog-actions"><button className="button" onClick={() => setModal('')}>取消</button><button className="button destructive" onClick={() => void workspace.remove().then(() => { setModal(''); notify('已删除当前简历。'); }).catch(error => notify(error.message, true))}>确认删除</button></div></Dialog>}
     {modal === 'help' && <Dialog title="使用简历工坊" onClose={() => setModal('')}><div className="help-content">
       <p>在左侧修改内容，右侧会按 A4 纸张实时排版。点击经历条目即可编辑；用箭头调整模块和条目的顺序。</p>
+      <p>编辑个人简介或经历描述时，先选中文字，再点击加粗、加黑或下划线；格式可以叠加，PDF 和 JSON 备份会保留。⌘ / Ctrl + B 加粗，⌘ / Ctrl + U 下划线。</p>
       <p>在“外观”中选择模板、字体和主题色，在“照片”中上传并裁切图片。“一键适配”会压缩间距与字号，尽量排为一页，保留全部内容。</p>
       <p>“导出 PDF”会生成可选择、可复制文字的文件。需要本机已安装 Chrome 或 Edge。也可以在更多操作中选择浏览器打印，纸张选择 A4、缩放 100%，关闭浏览器自带页眉页脚。</p>
       <p>内容自动保存到本机文件，刷新后继续编辑。更多操作可导出 JSON 备份、Markdown 文本，或复制当前简历。JSON 备份可在“导入”中恢复。</p>

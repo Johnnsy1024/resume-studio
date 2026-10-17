@@ -1,7 +1,32 @@
 import { z } from 'zod';
 
 const text = (length = 240) => z.string().max(length);
+export const textFormatSchema = z.object({
+  start: z.number().int().min(0).max(30000), end: z.number().int().min(1).max(30000),
+  bold: z.boolean(), black: z.boolean(), underline: z.boolean(),
+});
+export type TextFormat = z.infer<typeof textFormatSchema>;
+function validateFormats(value: string, formats: TextFormat[] | undefined, field: string, context: z.RefinementCtx) {
+  let previousEnd = 0;
+  for (const span of formats || []) {
+    if (span.start < previousEnd || span.end <= span.start || span.end > value.length || !(span.bold || span.black || span.underline)) {
+      context.addIssue({ code: 'custom', path: [field], message: '文字格式必须按顺序对应原文中的有效选区' });
+      break;
+    }
+    previousEnd = span.end;
+  }
+}
+const workProjectSchema = z.object({
+  id: z.uuid(), name: text(), description: text(30000),
+  descriptionBullets: z.boolean().optional(),
+  descriptionLineBullets: z.array(z.boolean()).max(30001).optional(),
+  descriptionFormat: z.array(textFormatSchema).max(30000).optional(),
+}).superRefine((project, context) => validateFormats(project.description, project.descriptionFormat, 'descriptionFormat', context));
+export type WorkProject = z.infer<typeof workProjectSchema>;
 export const itemSchema = z.object({
+  projects: z.array(workProjectSchema).max(50).optional(),
+  responsibilities: text(20000).optional(),
+  responsibilitiesFormat: z.array(textFormatSchema).max(20000).optional(),
   id: z.uuid(),
   title: text(),
   subtitle: text(),
@@ -9,6 +34,12 @@ export const itemSchema = z.object({
   start: text(40),
   end: text(40),
   description: text(30000),
+  descriptionBullets: z.boolean().optional(),
+  descriptionLineBullets: z.array(z.boolean()).max(30001).optional(),
+  descriptionFormat: z.array(textFormatSchema).max(30000).optional(),
+}).superRefine((item, context) => {
+  validateFormats(item.responsibilities || '', item.responsibilitiesFormat, 'responsibilitiesFormat', context);
+  validateFormats(item.description, item.descriptionFormat, 'descriptionFormat', context);
 });
 export const sectionSchema = z.object({
   id: z.uuid(),
@@ -45,7 +76,8 @@ export const resumeSchema = z.object({
     years: text(80),
     website: text(240),
     summary: text(20000),
-  }),
+    summaryFormat: z.array(textFormatSchema).max(20000).optional(),
+  }).superRefine((profile, context) => validateFormats(profile.summary, profile.summaryFormat, 'summaryFormat', context)),
   photo: z.string().max(1500000).regex(/^(|data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+=*)$/),
   style: styleSchema,
   sections: z.array(sectionSchema).max(24),

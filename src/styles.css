@@ -336,3 +336,27 @@ svg { flex-shrink: 0; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
 }
+
+.description-editor { gap: 0; }
+.description-editor > label { color: #7e8795; font-size: 13px; margin-bottom: 7px; }
+.text-format-toolbar { display: flex; gap: 3px; padding: 5px; background: #f7f9f8; border: 1px solid #dce2e2; border-radius: 6px 6px 0 0; flex-wrap: wrap; }
+.text-format-toolbar button { padding: 6px 7px; border-radius: 4px; font-size: 11px; gap: 4px; color: #58665e; }
+.text-format-toolbar button[aria-pressed='true'] { background: #dceee5; color: #17644e; }
+.text-format-toolbar button:disabled { opacity: .4; }
+.description-editor textarea { border-radius: 0 0 6px 6px; margin-top: -1px; }
+.description-editor > small { margin-top: 6px; }
+.description-format-preview { border-left: 2px solid #c8dfd2; margin-top: 10px; padding: 3px 9px; }
+.description-format-preview > p { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; line-height: 1.8; max-height: 140px; overflow: auto; margin-top: 4px; }
+
+.work-projects { min-width: 0; }
+.work-project-editor { display: grid; gap: 12px; margin-top: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 8px; }
+.work-project-name { color: #000; font-weight: 700; }
+
+/* 用可收缩的网格列限制长段落，避免下拉框被挤出编辑栏。 */
+.paragraph-options { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; margin-top: 8px; min-width: 0; }
+.paragraph-option { display: grid; grid-template-columns: minmax(0, 1fr) 100px; align-items: center; gap: 10px; min-width: 0; }
+.paragraph-option span { min-width: 0; overflow: hidden; overflow-wrap: anywhere; font-size: 12px; line-height: 1.6; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.paragraph-option select { width: 100px; flex-shrink: 0; padding: 5px; font-size: 12px; }
+
+.entry-job-title { font-weight: 400; }
+.entry-responsibilities { white-space: pre-wrap; overflow-wrap: anywhere; }
